@@ -26,7 +26,7 @@ unsigned LoopMeshBuilder::marchCubes(const ParametricScalarField &field)
     size_t totalCubesCount = mGridSize*mGridSize*mGridSize;
     unsigned totalTriangles = 0;
 
-    #pragma omp parallel for reduction(+:totalTriangles)
+    #pragma omp parallel for reduction(+:totalTriangles) schedule(dynamic, 64)
     for(size_t i = 0; i < totalCubesCount; ++i)
     {
         Vec3_t<float> cubeOffset( i % mGridSize,
