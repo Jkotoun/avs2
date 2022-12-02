@@ -38,10 +38,7 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
         return totalTriangles;
     }
 
-#pragma omp parallel
-    {
-#pragma omp master
-        {
+
 
             int subCubeEdgeLen = edgeLen / 2;
             for (int i = 0; i < 8; i++)
@@ -54,7 +51,7 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
                 // cube is not empty
                 if ((fieldVal <= emptyThresh))
                 {
-#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen)
+#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen) 
                     {
                         unsigned subCubeTriangles = splitCube(subCubePos, field, subCubeEdgeLen);
 #pragma omp atomic update
@@ -63,9 +60,7 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
                 }
             }
 #pragma omp taskwait
-        }
-    }
-    return totalTriangles;
+            return totalTriangles;
 }
 
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
@@ -77,8 +72,9 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
     Vec3_t<float> CubePos = {0, 0, 0};
 
     unsigned totalTriangles = 0;
-    // split cubes
-
+// split cubes
+#pragma omp parallel shared(field, totalTriangles)
+#pragma omp master
     totalTriangles = splitCube(CubePos, field, mGridSize);
     return totalTriangles;
 }
