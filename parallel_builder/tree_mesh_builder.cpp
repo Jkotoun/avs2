@@ -17,7 +17,50 @@
 TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
     : BaseMeshBuilder(gridEdgeSize, "Octree")
 {
+}
 
+unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const ParametricScalarField field, int edgeLen)
+{
+
+    unsigned totalTriangles = 0;
+    // splitting limit - march cubes
+    if (edgeLen < 16)
+    {
+        int totalCubesCount = edgeLen * edgeLen * edgeLen;
+        for (size_t i = 0; i < totalCubesCount; ++i)
+        {
+            Vec3_t<float> cubeOffset(cubePosition.x + (i % edgeLen),
+                                     cubePosition.y + ((i / edgeLen) % edgeLen),
+                                     cubePosition.z + (i / (edgeLen * edgeLen)));
+
+            totalTriangles += buildCube(cubeOffset, field);
+        }
+        return totalTriangles;
+    }
+
+
+
+            int subCubeEdgeLen = edgeLen / 2;
+            for (int i = 0; i < 8; i++)
+            {
+                // left bottom vertex of each cube
+                Vec3_t<float> subCubePos = {cubePosition.x + sc_vertexNormPos[i].x * subCubeEdgeLen, cubePosition.y + sc_vertexNormPos[i].y * subCubeEdgeLen, cubePosition.z + sc_vertexNormPos[i].z * subCubeEdgeLen};
+                Vec3_t<float> cubeMidPosTranformed = {(cubePosition.x + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.y + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.z + (subCubeEdgeLen / 2)) * mGridResolution};
+                double fieldVal = evaluateFieldAt(cubeMidPosTranformed, field);
+                double emptyThresh = mIsoLevel + ((sqrt(3) / 2) * subCubeEdgeLen);
+                // cube is not empty
+                if ((fieldVal <= emptyThresh))
+                {
+#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen) 
+                    {
+                        unsigned subCubeTriangles = splitCube(subCubePos, field, subCubeEdgeLen);
+#pragma omp atomic update
+                        totalTriangles += subCubeTriangles;
+                    }
+                }
+            }
+#pragma omp taskwait
+            return totalTriangles;
 }
 
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
@@ -26,16 +69,48 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
     // this class. This method will call itself to process the children.
     // It is also strongly suggested to first implement Octree as sequential
     // code and only when that works add OpenMP tasks to achieve parallelism.
-    
-    return 0;
+    Vec3_t<float> CubePos = {0, 0, 0};
+
+    unsigned totalTriangles = 0;
+// split cubes
+#pragma omp parallel shared(field, totalTriangles)
+#pragma omp single nowait
+    totalTriangles = splitCube(CubePos, field, mGridSize);
+    return totalTriangles;
+    //     size_t totalCubesCount = mGridSize*mGridSize*mGridSize;
+    // unsigned totalTriangles = 0;
+
+    // // #pragma omp parallel for reduction(+:totalTriangles) schedule(guided)
+    // for(size_t i = 0; i < totalCubesCount; ++i)
+    // {
+    //     Vec3_t<float> cubeOffset( i % mGridSize,
+    //                              (i / mGridSize) % mGridSize,
+    //                               i / (mGridSize*mGridSize));
+
+    //     totalTriangles += buildCube(cubeOffset, field);
+    // }
+    // return totalTriangles;
 }
 
 float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const ParametricScalarField &field)
 {
-    return 0.0f;
+    const Vec3_t<float> *pPoints = field.getPoints().data();
+    const unsigned count = unsigned(field.getPoints().size());
+
+    float value = std::numeric_limits<float>::max();
+
+    for (unsigned i = 0; i < count; ++i)
+    {
+        float distanceSquared = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x) +
+                                (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y) + (pos.z - pPoints[i].z) * (pos.z - pPoints[i].z);
+
+        value = std::min(value, distanceSquared);
+    }
+    return sqrt(value);
 }
 
 void TreeMeshBuilder::emitTriangle(const BaseMeshBuilder::Triangle_t &triangle)
 {
-    
+#pragma omp critical(trianglesVector)
+    mTriangles.push_back(triangle);
 }
