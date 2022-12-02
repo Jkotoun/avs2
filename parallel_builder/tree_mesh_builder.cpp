@@ -21,7 +21,7 @@ TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
 
 unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const ParametricScalarField field, int edgeLen)
 {
-    int min_edge_size = 4;
+    int min_edge_size = 2;
     unsigned totalTriangles = 0;
     // splitting limit - march cubes
     if (edgeLen <= min_edge_size)
