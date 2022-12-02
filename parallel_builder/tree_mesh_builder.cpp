@@ -29,6 +29,7 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
     {
     
         int totalCubesCount = edgeLen * edgeLen * edgeLen;
+        #pragma omp parallel for reduction(+:totalTriangles) schedule(guided)
         for (size_t i = 0; i < totalCubesCount; ++i)
         {
             Vec3_t<float> cubeOffset(cubePosition.x + (i % edgeLen),
