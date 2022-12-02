@@ -18,14 +18,13 @@ TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
     : BaseMeshBuilder(gridEdgeSize, "Octree")
 {
 }
-int cutoff = 8;
 
 unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const ParametricScalarField field, int edgeLen)
 {
-
+    int min_edge_size = 4;
     unsigned totalTriangles = 0;
     // splitting limit - march cubes
-    if ((mGridSize/edgeLen) > cutoff)
+    if (edgeLen <= min_edge_size)
     {
     
         int totalCubesCount = edgeLen * edgeLen * edgeLen;
@@ -46,16 +45,17 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
     {
         // left bottom vertex of each cube
         Vec3_t<float> subCubePos = {cubePosition.x + sc_vertexNormPos[i].x * subCubeEdgeLen, cubePosition.y + sc_vertexNormPos[i].y * subCubeEdgeLen, cubePosition.z + sc_vertexNormPos[i].z * subCubeEdgeLen};
-        Vec3_t<float> cubeMidPosTranformed = {(cubePosition.x + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.y + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.z + (subCubeEdgeLen / 2)) * mGridResolution};
+        Vec3_t<float> cubeMidPosTranformed = {(subCubePos.x + (subCubeEdgeLen / 2)) * mGridResolution, (subCubePos.y + (subCubeEdgeLen / 2)) * mGridResolution, (subCubePos.z + (subCubeEdgeLen / 2)) * mGridResolution};
+      
         double fieldVal = evaluateFieldAt(cubeMidPosTranformed, field);
-        double emptyThresh = mIsoLevel + ((sqrt(3) / 2) * subCubeEdgeLen);
+        double emptyThresh = mIsoLevel + ((sqrt(3) / 2) * (subCubeEdgeLen * mGridResolution));
         // cube is not empty
         if ((fieldVal <= emptyThresh))
         {
-#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen)
+            #pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen)
             {
                 unsigned subCubeTriangles = splitCube(subCubePos, field, subCubeEdgeLen);
-#pragma omp atomic update
+                #pragma omp atomic update
                 totalTriangles += subCubeTriangles;
             }
         }

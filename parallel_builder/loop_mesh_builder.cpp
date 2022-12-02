@@ -58,6 +58,6 @@ float LoopMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const Parametri
 
 void LoopMeshBuilder::emitTriangle(const BaseMeshBuilder::Triangle_t &triangle)
 {
-    #pragma omp critical(trianglesVector)
+    #pragma omp critical(trianglesPushback)
     mTriangles.push_back(triangle);
 }
