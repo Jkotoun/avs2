@@ -29,7 +29,6 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
     {
     
         int totalCubesCount = edgeLen * edgeLen * edgeLen;
-        // #pragma omp parallel for reduction(+:totalTriangles) schedule(guided)
         for (size_t i = 0; i < totalCubesCount; ++i)
         {
             Vec3_t<float> cubeOffset(cubePosition.x + (i % edgeLen),
@@ -74,7 +73,7 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
     unsigned totalTriangles = 0;
 // split cubes
 
-#pragma omp parallel shared(field, totalTriangles) num_threads(omp_get_max_threads()>16? 16 : omp_get_max_threads())
+#pragma omp parallel shared(field, totalTriangles)
 #pragma omp master
     totalTriangles = splitCube(CubePos, field, mGridSize);
     return totalTriangles;
