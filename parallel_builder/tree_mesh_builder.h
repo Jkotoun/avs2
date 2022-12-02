@@ -25,6 +25,7 @@ protected:
     const Triangle_t *getTrianglesArray() const { return mTriangles.data(); }
     std::vector<Triangle_t> mTriangles; ///< Temporary array of triangles
     unsigned splitCube(Vec3_t<float> &cubePosition, const ParametricScalarField field, int edgeLen);
+    
 };
 
 #endif // TREE_MESH_BUILDER_H

@@ -11,22 +11,25 @@
 #include <iostream>
 #include <math.h>
 #include <limits>
-
+#include <omp.h>
 #include "tree_mesh_builder.h"
 
 TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
     : BaseMeshBuilder(gridEdgeSize, "Octree")
 {
 }
+int cutoff = 4;
 
 unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const ParametricScalarField field, int edgeLen)
 {
 
     unsigned totalTriangles = 0;
     // splitting limit - march cubes
-    if (edgeLen < 16)
+    if ((mGridSize/edgeLen) > cutoff)
     {
+    
         int totalCubesCount = edgeLen * edgeLen * edgeLen;
+        #pragma omp parallel for reduction(+:totalTriangles) schedule(guided)
         for (size_t i = 0; i < totalCubesCount; ++i)
         {
             Vec3_t<float> cubeOffset(cubePosition.x + (i % edgeLen),
@@ -38,29 +41,27 @@ unsigned TreeMeshBuilder::splitCube(Vec3_t<float> &cubePosition, const Parametri
         return totalTriangles;
     }
 
-
-
-            int subCubeEdgeLen = edgeLen / 2;
-            for (int i = 0; i < 8; i++)
+    int subCubeEdgeLen = edgeLen / 2;
+    for (int i = 0; i < 8; i++)
+    {
+        // left bottom vertex of each cube
+        Vec3_t<float> subCubePos = {cubePosition.x + sc_vertexNormPos[i].x * subCubeEdgeLen, cubePosition.y + sc_vertexNormPos[i].y * subCubeEdgeLen, cubePosition.z + sc_vertexNormPos[i].z * subCubeEdgeLen};
+        Vec3_t<float> cubeMidPosTranformed = {(cubePosition.x + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.y + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.z + (subCubeEdgeLen / 2)) * mGridResolution};
+        double fieldVal = evaluateFieldAt(cubeMidPosTranformed, field);
+        double emptyThresh = mIsoLevel + ((sqrt(3) / 2) * subCubeEdgeLen);
+        // cube is not empty
+        if ((fieldVal <= emptyThresh))
+        {
+#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen)
             {
-                // left bottom vertex of each cube
-                Vec3_t<float> subCubePos = {cubePosition.x + sc_vertexNormPos[i].x * subCubeEdgeLen, cubePosition.y + sc_vertexNormPos[i].y * subCubeEdgeLen, cubePosition.z + sc_vertexNormPos[i].z * subCubeEdgeLen};
-                Vec3_t<float> cubeMidPosTranformed = {(cubePosition.x + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.y + (subCubeEdgeLen / 2)) * mGridResolution, (cubePosition.z + (subCubeEdgeLen / 2)) * mGridResolution};
-                double fieldVal = evaluateFieldAt(cubeMidPosTranformed, field);
-                double emptyThresh = mIsoLevel + ((sqrt(3) / 2) * subCubeEdgeLen);
-                // cube is not empty
-                if ((fieldVal <= emptyThresh))
-                {
-#pragma omp task default(none) shared(field, totalTriangles) firstprivate(subCubePos, subCubeEdgeLen) 
-                    {
-                        unsigned subCubeTriangles = splitCube(subCubePos, field, subCubeEdgeLen);
+                unsigned subCubeTriangles = splitCube(subCubePos, field, subCubeEdgeLen);
 #pragma omp atomic update
-                        totalTriangles += subCubeTriangles;
-                    }
-                }
+                totalTriangles += subCubeTriangles;
             }
+        }
+    }
 #pragma omp taskwait
-            return totalTriangles;
+    return totalTriangles;
 }
 
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
@@ -70,10 +71,10 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field)
     // It is also strongly suggested to first implement Octree as sequential
     // code and only when that works add OpenMP tasks to achieve parallelism.
     Vec3_t<float> CubePos = {0, 0, 0};
-
     unsigned totalTriangles = 0;
 // split cubes
-#pragma omp parallel shared(field, totalTriangles)
+
+#pragma omp parallel shared(field, totalTriangles) num_threads(omp_get_max_threads()>16? 16 : omp_get_max_threads())
 #pragma omp master
     totalTriangles = splitCube(CubePos, field, mGridSize);
     return totalTriangles;
