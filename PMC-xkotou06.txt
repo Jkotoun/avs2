@@ -9,7 +9,8 @@ Login: xkotou06
    neefektivitu paralelizaci té druhé?
 
 Efektivnější je paralelizace smyčky průchodu mřížkou v marchCubes. 
-Paralelizace druhé smyčky je neefektivní, protože neobsahuje až tolik výpočtů (pro každou krychli je třeba dělat více výpočtů, jako je například interpolace)
+Paralelizace druhé smyčky je neefektivní, protože je ve výpočtu více zanořená 
+(pro každou krychli je třeba dělat více výpočtů, jako je například interpolace apod, které by se dělaly jedním vláknem)
 
 2) Jaké plánování (rozdělení práce mezi vlákna) jste zvolili a proč? 
    Jaký vliv má velikost "chunk" při dynamickém plánování (8, 16, 32, 64)?
@@ -24,29 +25,49 @@ Pomocí kritické sekce (pragma omp critical) u vkládání trojúhelníků do v
 ===============================================================================
 
 1) Stručně popište použití OpenMP tasků ve vašem řešení.
-	Tasky jsou vytvářeny pro zpracování jednotlivých podprostorů, které je realizováno rekurzivním voláním funkce splitCube (při dosažení určité velikosti podprostoru jsou krychle zpracovány ve for cyklu). 
-	Jako privátní proměnná je každému tasku předána pozice podprostoru a jeho velikost. Sdílenou proměnnou je poté skalární pole a počet vytvořených trojúhelníků,
-	do kterých zapisují všechny tasky vytvořené z jednoho rodiče (zápis prováděn s využitím pragmy atomic update).
+
+Tasky jsou vytvářeny pro zpracování jednotlivých podprostorů, které je realizováno rekurzivním voláním funkce splitCube (při dosažení určité velikosti podprostoru jsou krychle zpracovány ve for cyklu). 
+Jako privátní proměnná je každému tasku předána pozice podprostoru a jeho velikost. Sdílenou proměnnou je poté skalární pole a počet vytvořených trojúhelníků,
+do kterých zapisují všechny tasky vytvořené z jednoho rodiče (zápis prováděn s využitím pragmy atomic update).
+
 2) Jaký vliv má na vaše řešení tzv. "cut-off"? Je vhodné vytvářet nový 
    task pro každou krychli na nejnižší úrovni?
-	Nejlepších výsledků dosahuje řešení při vytváření tasků pro krychle o velikosti 2. Vytváření tasků zvlášť pro každou krychli o velikosti 1 je příliš velká režie, 
-	větší krychle nejsou zase tak efektivní kvůli tomu, že některé zpracovávané krychle mohou být celé nad nebo pod povrchem.
+
+Nejlepších výsledků dosahuje řešení při vytváření tasků pro krychle o velikosti 2. Vytváření tasků zvlášť pro každou krychli o velikosti 1 je příliš velká režie, 
+větší krychle nejsou zase tak efektivní kvůli tomu, že některé zpracovávané krychle mohou být celé nad nebo pod povrchem.
+
 3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
-	Ukládání ve funkci emitTriangle pomocí kritické sekce (pragma omp critical) a sčítání počtu uložených trojúhelníků jednotlivými tasky v rodiči pomocí pragmy atomic update.
+	
+Ukládání ve funkci emitTriangle pomocí kritické sekce (pragma omp critical) a sčítání počtu uložených trojúhelníků jednotlivými tasky v rodiči pomocí pragmy atomic update.
 
 Úloha 3: Grafy škálování všech řešení
 ===============================================================================
 
 1) Stručně zhodnoťte efektivitu vytvořených řešení (na základě grafů škálování).
+Dle grafu škálování mřížky jsou pro menší mřížky obě implementace podobně efektivní, pro větší mřížky je efektivnější implementace Octree. 
+Dle grafu silného i slabého škálování lze vidět, že implementace Octree je efektivnější (doba vykonání je kratší).
+Z pohledu silného škálování lépe škáluje implementace OpenMP Loop, která až do hodnoty 2^4 vláken klesá téměř ideálně (na zdvojnásobení vláken poloviční čas vykonání). Implementace
+Octree škáluje hůře. Z pohledfu slabého škálování je na tom opět o něco lípe OpenMP Loop, protože s přibývajícími vlákny a odpovídající prací čas dokonce klesá, až na případ
+malého vstupu na hodně vláken (Velikost vstupu 10 na vlákno při 2^5 vláknech)
+
+
 
 2) V jakém případě (v závislosti na počtu bodů ve vstupním souboru a velikosti 
    mřížky) bude vaše řešení 1. úlohy neefektivní? (pokud takový případ existuje)
+   
+V případě kdy bude velká část podprostoru prázdná (nebude obsahovat žádný povrch - většina krychlí bude celá nad nebo pod povrchem). Tento problém řeší implementace Octree, která
+takovéto části podprostoru nezpracovává.
 
 3) Je (nebo není) stromový algoritmus efektivnější z pohledu slabého škálování 
    vzhledem ke vstupu?
-Z pohledu slabého škálování efektivní není, ideální je konstantní nebo klesající funkce (zde spíše rostoucí)
-4) Jaký je rozdíle mezi silným a slabým škálováním?
-Slabé škálování uvažuje konstatní čas výpočtu na jádro (chceme vykonat co nejvíce práce za určitý čas), silné škálování uvažuje konstantní práci (chceme ji vykonat co nejrychleji)
+   
+Z pohledu slabého škálování algoritmus Octree efektivní není, čas při přidávání vláken roste, ideálně bychom chtěli aby byl stejný nebo 
+ještě menší, což lze vidět u implementace OpenMP Loop.
+
+
+4) Jaký je rozdíl mezi silným a slabým škálováním?
+Slabé škálování - uvažuje konstatní čas výpočtu na jádro (chceme vykonat co nejvíce práce za určitý čas - zkoumáme tedy čas při přidání vláken i práce)
+Silné škálování - uvažuje konstantní práci (chceme ji vykonat co nejrychleji, zkoumá tedy změnu času provedení nad stejnou prací s různým počtem vláken)
 
 Úloha 4: Analýza využití jader pomocí VTune
 ================================================================================
@@ -66,5 +87,6 @@ Slabé škálování uvažuje konstatní čas výpočtu na jádro (chceme vykona
    tree: 78.4% (28.206 z 36)
 
 3) Jaké jsou závěry z těchto měření?
+
 Obě paralelní implementace jsou mnohem efektivnější než sériová. Implementace se stromovým průchodem sice o něco méně využívá CPU, ale celkoý čas provedení úkolu je 
 výrazně kratší (281 ms vs 708 ms při využití všech jader) 
